@@ -40,7 +40,6 @@ export interface MinimapOptions {
 
 export class HorizontalMinimap {
   private canvas: HTMLCanvasElement;
-  private handle: HTMLElement;
   private overlay: HTMLElement;
   private scrollThumb: HTMLElement;
   private ctx: CanvasRenderingContext2D;
@@ -73,31 +72,23 @@ export class HorizontalMinimap {
   // Hover state
   private isHovered: boolean = false;
 
-  // Drag state — handle virtual-width drag
-  private handleDragActive: boolean = false;
-  private handleDragStartX: number = 0;
-  private handleDragStartVW: number = 0;
-
   // Callbacks
   public onScrollChange: (() => void) | null = null;
   public onVirtualWidthConfirmed: (() => void) | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
-    handle: HTMLElement,
     overlay: HTMLElement,
     scrollThumb: HTMLElement,
     options?: MinimapOptions,
   ) {
     this.canvas = canvas;
-    this.handle = handle;
     this.overlay = overlay;
     this.scrollThumb = scrollThumb;
     this.ctx = canvas.getContext('2d')!;
     this.decayMs = options?.decayMs ?? 5000;
     this.frameMs = 1000 / (options?.targetFps ?? 20);
 
-    this.initHandleEvents();
     this.initCanvasEvents();
   }
 
@@ -201,43 +192,6 @@ export class HorizontalMinimap {
   getScrollX(): number { return this.scrollX; }
 
   // ---- Private: event handlers ----
-
-  private initHandleEvents(): void {
-    // Drag to resize virtual width
-    this.handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      this.handleDragActive = true;
-      this.handleDragStartX = e.clientX;
-      this.handleDragStartVW = this.virtualWidth;
-      this.handle.classList.add('dragging');
-
-      const onMove = (e: MouseEvent) => {
-        if (!this.handleDragActive) return;
-        const delta = e.clientX - this.handleDragStartX;
-        this.virtualWidth = Math.max(
-          this.viewWidth,
-          Math.min(this.viewWidth * 8, this.handleDragStartVW + delta),
-        );
-        this.scrollX = Math.min(this.scrollX, Math.max(0, this.virtualWidth - this.viewWidth));
-        this.showOverlay();
-        this.onScrollChange?.();
-      };
-      const onUp = () => {
-        this.handleDragActive = false;
-        this.handle.classList.remove('dragging');
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        this.onVirtualWidthConfirmed?.();
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-
-    // Double-click to reset
-    this.handle.addEventListener('dblclick', () => {
-      this.resetVirtualWidth();
-    });
-  }
 
   private initCanvasEvents(): void {
     // Click → jump scroll to position
