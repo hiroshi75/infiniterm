@@ -38,6 +38,40 @@ let sharingClient: SharingClient | null = null;
 let webTerminalServer: http.Server | null = null;
 let webTerminalWss: WebSocketServer | null = null;
 let webTerminalPty: pty.IPty | null = null;
+let webTerminalPassword: string | null = null;
+let webTerminalPort: number | null = null;
+
+// ---- Graceful restart state persistence ----
+
+const RESTART_STATE_FILE = path.join(os.tmpdir(), 'infiniterm-restart-state.json');
+
+interface RestartState {
+  webTerminal?: { password: string; port: number };
+  timestamp: number;
+}
+
+function saveRestartState(): void {
+  const state: RestartState = { timestamp: Date.now() };
+  if (webTerminalServer && webTerminalPassword && webTerminalPort) {
+    state.webTerminal = { password: webTerminalPassword, port: webTerminalPort };
+  }
+  try {
+    fs.writeFileSync(RESTART_STATE_FILE, JSON.stringify(state), 'utf8');
+  } catch { /* ignore */ }
+}
+
+function loadAndClearRestartState(): RestartState | null {
+  try {
+    const data = fs.readFileSync(RESTART_STATE_FILE, 'utf8');
+    fs.unlinkSync(RESTART_STATE_FILE);
+    const state = JSON.parse(data) as RestartState;
+    // Ignore stale state (older than 30 seconds)
+    if (Date.now() - state.timestamp > 30000) return null;
+    return state;
+  } catch {
+    return null;
+  }
+}
 
 // ---- Platform detection ----
 
@@ -797,25 +831,23 @@ app.whenReady().then(() => {
     if (webTerminalServer) { try { webTerminalServer.close(); } catch {} webTerminalServer = null; }
   }
 
-  ipcMain.handle('web-terminal-start', async (_event, { port: requestedPort }: { port?: number }) => {
+  // Shared web terminal startup logic
+  async function startWebTerminalServer(port: number, password: string): Promise<{ port: number; username: string; password: string; localUrl: string; tailscaleUrl: string | null }> {
     stopWebTerminal();
 
     const shells = detectShells();
     const prefs = loadPrefs();
     const found = shells.find(s => s.id === prefs.defaultShellId) ?? shells[0];
     const shellExe = found?.exe ?? (isMac ? '/bin/zsh' : (process.env.SHELL ?? '/bin/bash'));
-    const port = requestedPort || 7681;
-    const password = Math.random().toString(36).slice(2, 10);
 
-    // Read the custom HTML page and embed token
+    webTerminalPassword = password;
+    webTerminalPort = port;
+
     const htmlPath = path.join(__dirname, '..', 'assets', 'web-terminal.html');
     const htmlTemplate = fs.readFileSync(htmlPath, 'utf8');
     const htmlContent = htmlTemplate.replace('__WS_TOKEN__', password);
-
-    // Basic auth check
     const expectedAuth = 'Basic ' + Buffer.from(`infiniterm:${password}`).toString('base64');
 
-    // HTTP server for the HTML page
     webTerminalServer = http.createServer((req, res) => {
       const auth = req.headers.authorization;
       if (auth !== expectedAuth) {
@@ -827,14 +859,11 @@ app.whenReady().then(() => {
       res.end(htmlContent);
     });
 
-    // WebSocket server on same port
     webTerminalWss = new WebSocketServer({ server: webTerminalServer, path: '/ws' });
 
     webTerminalWss.on('connection', (ws: WebSocket, req) => {
-      // Auth check on WebSocket upgrade
       const auth = req.headers.authorization;
       if (auth !== expectedAuth) {
-        // Also check URL params for auth (mobile browsers may not send auth header on WS)
         const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
         const token = url.searchParams.get('token');
         if (token !== password) {
@@ -843,7 +872,6 @@ app.whenReady().then(() => {
         }
       }
 
-      // Spawn PTY for this WebSocket session
       const env = resolveShellEnv(shellExe);
       const ptyProc = pty.spawn(shellExe, [], {
         name: 'xterm-256color',
@@ -856,20 +884,15 @@ app.whenReady().then(() => {
       webTerminalPty = ptyProc;
 
       ptyProc.onData((data: string) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(data);
-        }
+        if (ws.readyState === WebSocket.OPEN) ws.send(data);
       });
 
       ptyProc.onExit(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
+        if (ws.readyState === WebSocket.OPEN) ws.close();
       });
 
       ws.on('message', (msg: Buffer | string) => {
         const str = msg.toString();
-        // Check for resize messages
         try {
           const parsed = JSON.parse(str);
           if (parsed.type === 'resize' && parsed.cols && parsed.rows) {
@@ -892,25 +915,56 @@ app.whenReady().then(() => {
     });
 
     const ips = getNetworkIPs();
-    const localUrl = `http://infiniterm:${password}@${ips.local}:${port}`;
-    const tailscaleUrl = ips.tailscale ? `http://infiniterm:${password}@${ips.tailscale}:${port}` : null;
-    const qrTarget = tailscaleUrl ?? localUrl;
-    const qrDataUrl = await QRCode.toDataURL(qrTarget, { width: 200, margin: 2 });
-
     return {
       port,
       username: 'infiniterm',
       password,
       localUrl: `http://${ips.local}:${port}`,
       tailscaleUrl: ips.tailscale ? `http://${ips.tailscale}:${port}` : null,
-      qrDataUrl,
     };
+  }
+
+  ipcMain.handle('web-terminal-start', async (_event, { port: requestedPort, password: requestedPassword }: { port?: number; password?: string }) => {
+    const port = requestedPort || 7681;
+    const password = requestedPassword || Math.random().toString(36).slice(2, 10);
+    const result = await startWebTerminalServer(port, password);
+
+    const localUrl = `http://infiniterm:${password}@${result.localUrl.replace('http://', '')}`;
+    const tailscaleUrl = result.tailscaleUrl ? `http://infiniterm:${password}@${result.tailscaleUrl.replace('http://', '')}` : null;
+    const qrTarget = tailscaleUrl ?? localUrl;
+    const qrDataUrl = await QRCode.toDataURL(qrTarget, { width: 200, margin: 2 });
+
+    return { ...result, qrDataUrl };
   });
 
   ipcMain.on('web-terminal-stop', () => {
     stopWebTerminal();
+    webTerminalPassword = null;
+    webTerminalPort = null;
     mainWindow?.webContents.send('web-terminal-stopped');
   });
+
+  // ---- Graceful restart (preserves web terminal connection credentials) ----
+
+  ipcMain.handle('graceful-restart', async () => {
+    saveRestartState();
+    app.relaunch();
+    app.exit(0);
+  });
+
+  // Auto-restore web terminal from restart state
+  const restartState = loadAndClearRestartState();
+  if (restartState?.webTerminal) {
+    const { password: savedPassword, port: savedPort } = restartState.webTerminal;
+    mainWindow?.webContents.once('did-finish-load', async () => {
+      try {
+        const result = await startWebTerminalServer(savedPort, savedPassword);
+        mainWindow?.webContents.send('web-terminal-restored', result);
+      } catch (err) {
+        console.error('Failed to restore web terminal:', err);
+      }
+    });
+  }
 
   mainWindow?.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);

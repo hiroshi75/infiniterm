@@ -205,6 +205,16 @@ const electronAPI = {
     ipcRenderer.on('web-terminal-error', handler);
     return () => ipcRenderer.removeListener('web-terminal-error', handler);
   },
+
+  // Graceful restart (preserves web terminal connection)
+  gracefulRestart: (): Promise<void> =>
+    ipcRenderer.invoke('graceful-restart'),
+
+  onWebTerminalRestored: (callback: (info: { port: number; username: string; password: string; localUrl: string; tailscaleUrl: string | null }) => void): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, info: any) => callback(info);
+    ipcRenderer.on('web-terminal-restored', handler);
+    return () => ipcRenderer.removeListener('web-terminal-restored', handler);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

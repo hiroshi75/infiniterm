@@ -416,15 +416,19 @@ html, body { height: 100%; background: #1e1e2e; overflow: hidden; touch-action: 
   var token = '__WS_TOKEN__';
   var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   var wsUrl = proto + '//' + location.host + '/ws?token=' + encodeURIComponent(token);
+  var reconnectTimer = null;
+  var reconnectAttempt = 0;
 
   function connect() {
     if (ws && ws.readyState <= 1) ws.close();
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     isAlternateScreen = false;
     ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
     document.getElementById('reconnect-banner').style.display = 'none';
     ws.onopen = function() {
       connected = true;
+      reconnectAttempt = 0;
       ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
     };
     ws.onmessage = function(ev) {
@@ -443,12 +447,25 @@ html, body { height: 100%; background: #1e1e2e; overflow: hidden; touch-action: 
     };
     ws.onclose = function() {
       connected = false;
-      term.write('\r\n\x1b[31m[Connection closed]\x1b[0m\r\n');
+      term.write('\r\n\x1b[33m[Reconnecting...]\x1b[0m\r\n');
       document.getElementById('reconnect-banner').style.display = 'block';
       layoutViewport();
+      scheduleReconnect();
     };
     ws.onerror = function() { connected = false; };
   }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    // Backoff: 1s, 2s, 3s, ... max 5s
+    var delay = Math.min(1000 + reconnectAttempt * 1000, 5000);
+    reconnectAttempt++;
+    reconnectTimer = setTimeout(function() {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  }
+
   connect();
 
   term.onData(function(data) {
