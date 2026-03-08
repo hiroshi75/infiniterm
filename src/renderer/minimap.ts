@@ -53,6 +53,8 @@ export class HorizontalMinimap {
   private removeOnRender: (() => void) | null = null;
   // Previous screen content: screenSnapshot[row][col] = char
   private screenSnapshot: string[][] = [];
+  private lastCols: number = 0;
+  private lastRows: number = 0;
 
   // Scroll / virtual width state
   private viewWidth: number = 0;
@@ -122,37 +124,39 @@ export class HorizontalMinimap {
     // Track renders — compare each cell with previous snapshot per column
     // A column lights up if ANY row in that column changed content.
     this.screenSnapshot = [];
+    this.lastCols = term.cols;
+    this.lastRows = term.rows;
     const disposable = term.onRender(({ start, end }) => {
       const now = performance.now();
       const buf = term.buffer.active;
       const cols = term.cols;
+      const rows = term.rows;
 
-      // Resize activityMap if terminal cols changed (virtual width expand/shrink)
-      if (this.activityMap!.length !== cols) {
-        const oldMap = this.activityMap!;
-        this.activityMap = new Float64Array(cols).fill(0);
-        // Preserve existing activity data
-        for (let i = 0; i < Math.min(oldMap.length, cols); i++) {
-          this.activityMap[i] = oldMap[i];
-        }
-        // Reset snapshots since column layout changed
-        this.screenSnapshot = [];
+      // Reset to dark on any resize (cols or rows change)
+      if (cols !== this.lastCols || rows !== this.lastRows) {
+        this.resetActivity();
       }
 
       for (let row = start; row <= end; row++) {
         const line = buf.getLine(row);
         if (!line) continue;
-        // Ensure snapshot row exists with correct width
-        if (!this.screenSnapshot[row] || this.screenSnapshot[row].length !== cols) {
-          this.screenSnapshot[row] = new Array(cols).fill('');
-        }
-        const snapRow = this.screenSnapshot[row];
-        for (let col = 0; col < cols; col++) {
-          const cell = line.getCell(col);
-          const ch = cell ? (cell.getChars() || ' ') : ' ';
-          if (ch !== snapRow[col]) {
-            this.activityMap![col] = now;
-            snapRow[col] = ch;
+        const isNewRow = !this.screenSnapshot[row] || this.screenSnapshot[row].length !== cols;
+        if (isNewRow) {
+          // First time seeing this row: just record current content, no activity
+          this.screenSnapshot[row] = new Array(cols);
+          for (let col = 0; col < cols; col++) {
+            const cell = line.getCell(col);
+            this.screenSnapshot[row][col] = cell ? (cell.getChars() || ' ') : ' ';
+          }
+        } else {
+          const snapRow = this.screenSnapshot[row];
+          for (let col = 0; col < cols; col++) {
+            const cell = line.getCell(col);
+            const ch = cell ? (cell.getChars() || ' ') : ' ';
+            if (ch !== snapRow[col]) {
+              this.activityMap![col] = now;
+              snapRow[col] = ch;
+            }
           }
         }
       }
@@ -186,6 +190,16 @@ export class HorizontalMinimap {
     this.syncCanvasSize();
   }
 
+  /** Reset heatmap activity and snapshots (dark start). */
+  private resetActivity(): void {
+    if (this.term) {
+      this.activityMap = new Float64Array(this.term.cols).fill(0);
+      this.lastCols = this.term.cols;
+      this.lastRows = this.term.rows;
+    }
+    this.screenSnapshot = [];
+  }
+
   /** Expand/shrink virtual width by ±colsDelta columns. */
   adjustVirtualWidth(colsDelta: number): void {
     if (!this.term || this.viewWidth <= 0) return;
@@ -196,6 +210,7 @@ export class HorizontalMinimap {
       Math.min(this.viewWidth * 8, this.virtualWidth + deltaPx),
     );
     this.scrollX = Math.min(this.scrollX, Math.max(0, this.virtualWidth - this.viewWidth));
+    this.resetActivity();
     this.showOverlay();
     this.onVirtualWidthConfirmed?.();
     this.onScrollChange?.();
@@ -205,6 +220,7 @@ export class HorizontalMinimap {
   resetVirtualWidth(): void {
     this.virtualWidth = this.viewWidth;
     this.scrollX = 0;
+    this.resetActivity();
     this.showOverlay();
     this.onVirtualWidthConfirmed?.();
     this.onScrollChange?.();
