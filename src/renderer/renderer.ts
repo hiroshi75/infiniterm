@@ -146,11 +146,10 @@ const shellPickerList = document.getElementById('shell-picker-list')!;
 // ---- Minimap ----
 
 const minimapCanvas  = document.getElementById('minimap-canvas') as HTMLCanvasElement;
-const minimapHandle  = document.getElementById('minimap-handle')!;
 const widthOverlay   = document.getElementById('width-overlay')!;
 const minimapScrollThumb = document.getElementById('minimap-scroll-thumb')!;
 
-const minimap = new HorizontalMinimap(minimapCanvas, minimapHandle, widthOverlay, minimapScrollThumb);
+const minimap = new HorizontalMinimap(minimapCanvas, widthOverlay, minimapScrollThumb);
 
 // ミニマップ領域全体で wheel を消費 (canvas 外のハンドル・トラック部分もカバー)
 document.getElementById('minimap-area')!.addEventListener('wheel', (e) => {

@@ -686,32 +686,6 @@
       display: none;
     }
 
-    #minimap-handle {
-      width: 24px;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: col-resize;
-      color: rgba(255, 255, 255, 0.3);
-      font-size: 11px;
-      letter-spacing: -2px;
-      user-select: none;
-      border-left: 1px solid rgba(255, 255, 255, 0.06);
-      transition: color 0.12s, background 0.12s;
-      flex-shrink: 0;
-    }
-
-    #minimap-handle:hover {
-      color: rgba(255, 255, 255, 0.8);
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    #minimap-handle.dragging {
-      color: var(--accent);
-      background: rgba(137, 180, 250, 0.08);
-    }
-
     /* ---- Width overlay ---- */
     #width-overlay {
       position: fixed;
@@ -1124,7 +1098,6 @@
     <div id="minimap-area">
       <div id="minimap-main">
         <canvas id="minimap-canvas"></canvas>
-        <div id="minimap-handle" title="ドラッグで仮想幅を変更 / ダブルクリックでリセット">&#10093;&#10093;</div>
       </div>
       <div id="minimap-scroll-track">
         <div id="minimap-scroll-thumb"></div>
