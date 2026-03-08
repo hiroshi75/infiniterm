@@ -102,11 +102,10 @@ const shellPickerList = document.getElementById('shell-picker-list')!;
 // ---- Minimap ----
 
 const minimapCanvas  = document.getElementById('minimap-canvas') as HTMLCanvasElement;
-const minimapHandle  = document.getElementById('minimap-handle')!;
 const widthOverlay   = document.getElementById('width-overlay')!;
 const minimapScrollThumb = document.getElementById('minimap-scroll-thumb')!;
 
-const minimap = new HorizontalMinimap(minimapCanvas, minimapHandle, widthOverlay, minimapScrollThumb);
+const minimap = new HorizontalMinimap(minimapCanvas, widthOverlay, minimapScrollThumb);
 
 minimap.onScrollChange = () => {
   const session = sessions.get(activeTabId);
