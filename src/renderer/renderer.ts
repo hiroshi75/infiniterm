@@ -890,11 +890,7 @@ function attachClipboard(pane: HTMLElement, term: Terminal, session: TabSession)
     try {
       const text = await navigator.clipboard.readText();
       if (!text) return;
-      if (session.isRemote && session.remoteTabId !== undefined) {
-        window.electronAPI.shareRemoteInput(session.remoteTabId, text);
-      } else if (session.ptyId !== null) {
-        window.electronAPI.sendInput(session.ptyId, text);
-      }
+      term.paste(text);
     } catch {}
   };
 
@@ -1287,8 +1283,13 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // macOS: Cmd+C (選択があればコピー、なければ Ctrl+C シグナル) / Cmd+V (ペースト)
-  if (window.electronAPI.platform === 'darwin' && e.metaKey && !e.ctrlKey && !e.altKey) {
+  // macOS: Cmd+C/V, Windows/Linux: Ctrl+Shift+C/V or Ctrl+C/V
+  const isMac = window.electronAPI.platform === 'darwin';
+  const isCopyPasteModifier = isMac
+    ? (e.metaKey && !e.ctrlKey && !e.altKey)
+    : (e.ctrlKey && !e.metaKey && !e.altKey);
+
+  if (isCopyPasteModifier) {
     if (e.code === 'KeyC') {
       const session = sessions.get(activeTabId);
       if (session) {
@@ -1300,6 +1301,7 @@ document.addEventListener('keydown', (e) => {
           return;
         }
       }
+      // 選択がなければ通常の Ctrl+C (SIGINT) として PTY に渡す
     }
     if (e.code === 'KeyV') {
       e.preventDefault();
@@ -1308,11 +1310,7 @@ document.addEventListener('keydown', (e) => {
       if (session) {
         navigator.clipboard.readText().then(text => {
           if (!text) return;
-          if (session.isRemote && session.remoteTabId !== undefined) {
-            window.electronAPI.shareRemoteInput(session.remoteTabId, text);
-          } else if (session.ptyId !== null) {
-            window.electronAPI.sendInput(session.ptyId, text);
-          }
+          session.term.paste(text);
         }).catch(() => {});
       }
       return;
