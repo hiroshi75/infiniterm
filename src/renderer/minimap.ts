@@ -237,6 +237,24 @@ export class HorizontalMinimap {
     }
   }
 
+  /** Scroll to the very start (left edge). */
+  scrollToStart(): void {
+    if (this.scrollX !== 0) {
+      this.scrollX = 0;
+      this.onScrollChange?.();
+    }
+  }
+
+  /** Scroll to the very end (right edge). */
+  scrollToEnd(): void {
+    const maxScroll = this.virtualWidth - this.viewWidth;
+    if (maxScroll <= 0) return;
+    if (this.scrollX !== maxScroll) {
+      this.scrollX = maxScroll;
+      this.onScrollChange?.();
+    }
+  }
+
   getVirtualWidth(): number { return this.virtualWidth; }
   getScrollX(): number { return this.scrollX; }
 

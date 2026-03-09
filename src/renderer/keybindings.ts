@@ -29,6 +29,8 @@ export const DEFAULT_KEYBINDINGS: Record<string, string | string[]> = {
   resetWidth: 'Ctrl+Shift+Backquote',
   scrollRight: 'Ctrl+Shift+Period',
   scrollLeft: 'Ctrl+Shift+Comma',
+  scrollToEnd: 'Ctrl+Shift+L',
+  scrollToStart: 'Ctrl+Shift+K',
   tab1: 'Ctrl+1',
   tab2: 'Ctrl+2',
   tab3: 'Ctrl+3',

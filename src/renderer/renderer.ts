@@ -1245,6 +1245,8 @@ const actionHandlers: Record<string, (e: KeyboardEvent) => void> = {
     const speed = Math.min(40 + scrollRepeatCount * 12, 400);
     minimap.scrollBy(-speed);
   },
+  scrollToStart: () => minimap.scrollToStart(),
+  scrollToEnd: () => minimap.scrollToEnd(),
   tab1: () => switchToTab(0),
   tab2: () => switchToTab(1),
   tab3: () => switchToTab(2),
