@@ -127,6 +127,7 @@ export interface AppSettings {
   fileLinkEnabled: boolean;
   editor: string;
   language: string;
+  tmuxPaneExpansion: 'equal' | 'left';
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -140,4 +141,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fileLinkEnabled: true,
   editor: 'auto',
   language: 'ja',
+  tmuxPaneExpansion: 'equal',
 };

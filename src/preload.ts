@@ -67,6 +67,9 @@ const electronAPI = {
   resize: (id: number, cols: number, rows: number): void =>
     ipcRenderer.send('pty-resize', { id, cols, rows }),
 
+  resizeTmuxLeft: (id: number, cols: number, rows: number): void =>
+    ipcRenderer.send('pty-resize-tmux-left', { id, cols, rows }),
+
   // Events
   onData: (callback: (event: PtyDataEvent) => void): (() => void) => {
     const handler = (_: Electron.IpcRendererEvent, event: PtyDataEvent) => callback(event);

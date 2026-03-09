@@ -84,6 +84,10 @@ const translations: Record<string, Record<string, string>> = {
     ttydNotInstalled: 'ttyd がインストールされていません。brew install ttyd でインストールしてください。',
     tailscaleLabel: 'Tailscale',
     localLabel: 'ローカル',
+    // Tmux pane expansion
+    tmuxPaneExpansion: 'tmux ペイン拡大モード',
+    tmuxPaneEqual: '全ペイン均等',
+    tmuxPaneLeft: '左端ペインのみ',
   },
   en: {
     settings: 'Settings',
@@ -163,6 +167,9 @@ const translations: Record<string, Record<string, string>> = {
     ttydNotInstalled: 'ttyd is not installed. Install with: brew install ttyd',
     tailscaleLabel: 'Tailscale',
     localLabel: 'Local',
+    tmuxPaneExpansion: 'tmux Pane Expansion Mode',
+    tmuxPaneEqual: 'All panes equal',
+    tmuxPaneLeft: 'Leftmost pane only',
   },
 };
 

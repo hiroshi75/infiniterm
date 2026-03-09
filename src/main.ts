@@ -469,6 +469,73 @@ app.whenReady().then(() => {
     }
   });
 
+  // Resize with tmux left-pane expansion mode
+  // 1. Query current tmux pane widths before resize
+  // 2. Resize the PTY (tmux redistributes equally)
+  // 3. Restore non-leftmost pane widths so leftmost pane gets all extra space
+  ipcMain.on('pty-resize-tmux-left', (_event, { id, cols, rows }: { id: number; cols: number; rows: number }) => {
+    const ptyProc = ptyProcesses.get(id);
+    if (!ptyProc) return;
+
+    // Find tmux session associated with this PTY
+    let tmuxTarget: string | null = null;
+    try {
+      let ptsTty: string;
+      if (process.platform === 'linux') {
+        ptsTty = fs.readlinkSync(`/proc/${ptyProc.pid}/fd/0`);
+      } else {
+        // macOS: ps -p <pid> -o tty= returns e.g. "ttys001"
+        const ttyRaw = execFileSync('ps', ['-p', String(ptyProc.pid), '-o', 'tty='], {
+          encoding: 'utf8', timeout: 1000,
+        }).trim();
+        ptsTty = `/dev/${ttyRaw}`;
+      }
+      const clients = execFileSync('tmux', ['list-clients', '-F', '#{client_tty} #{session_name}'], {
+        encoding: 'utf8', timeout: 1000,
+      }).trim();
+      for (const line of clients.split('\n')) {
+        const spaceIdx = line.indexOf(' ');
+        if (spaceIdx < 0) continue;
+        const tty = line.substring(0, spaceIdx);
+        const session = line.substring(spaceIdx + 1);
+        if (tty === ptsTty) { tmuxTarget = session; break; }
+      }
+    } catch { /* tmux not available or not running */ }
+
+    // Query current pane widths before resize
+    interface PaneInfo { paneId: string; width: number; left: number; }
+    let nonLeftPanes: PaneInfo[] = [];
+    if (tmuxTarget !== null) {
+      try {
+        const output = execFileSync('tmux', [
+          'list-panes', '-t', tmuxTarget,
+          '-F', '#{pane_id} #{pane_width} #{pane_left}',
+        ], { encoding: 'utf8', timeout: 1000 }).trim();
+        const panes = output.split('\n').map(line => {
+          const [paneId, w, l] = line.split(' ');
+          return { paneId, width: parseInt(w), left: parseInt(l) };
+        });
+        nonLeftPanes = panes.filter(p => p.left > 0);
+      } catch { /* ignore */ }
+    }
+
+    // Resize the PTY
+    try { ptyProc.resize(Math.max(1, cols), Math.max(1, rows)); } catch { /* ignore */ }
+
+    // After tmux processes the resize, restore non-leftmost pane widths
+    if (nonLeftPanes.length > 0) {
+      setTimeout(() => {
+        for (const pane of nonLeftPanes) {
+          try {
+            execFileSync('tmux', ['resize-pane', '-t', pane.paneId, '-x', String(pane.width)], {
+              timeout: 1000,
+            });
+          } catch { /* ignore */ }
+        }
+      }, 50);
+    }
+  });
+
   // Kill
   ipcMain.on('pty-kill', (_event, { id }: { id: number }) => {
     const ptyProc = ptyProcesses.get(id);
