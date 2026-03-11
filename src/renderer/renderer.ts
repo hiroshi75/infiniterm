@@ -876,6 +876,22 @@ function createTerminal(): { term: Terminal; fitAddon: FitAddon; searchAddon: Se
   return { term, fitAddon, searchAddon };
 }
 
+// ---- OSC 52 clipboard (tmux mouse copy support) ----
+
+function registerOsc52(term: Terminal): void {
+  term.parser.registerOscHandler(52, (data: string) => {
+    const idx = data.indexOf(';');
+    if (idx === -1) return false;
+    const payload = data.slice(idx + 1);
+    if (payload === '?') return false; // clipboard query — ignore
+    try {
+      const text = atob(payload);
+      navigator.clipboard.writeText(text).catch(() => {});
+    } catch { /* invalid base64 */ }
+    return true;
+  });
+}
+
 // ---- Clipboard helpers ----
 
 function attachClipboard(pane: HTMLElement, term: Terminal): void {
@@ -991,6 +1007,7 @@ async function createTab(shellExe?: string): Promise<void> {
   };
   sessions.set(tabId, session);
   registerOsc7(term, session);
+  registerOsc52(term);
   registerFileLinks(term, session);
   registerFilenameLinks(term, session);
   attachClipboard(pane, term);
@@ -1538,6 +1555,7 @@ async function connectSsh(profile: SSHProfile): Promise<void> {
   term.open(pane);
   loadWebGL(term);
   registerOsc7(term, session);
+  registerOsc52(term);
   registerFileLinks(term, session);
   registerFilenameLinks(term, session);
   attachClipboard(pane, term);
@@ -1928,6 +1946,7 @@ function createRemoteTab(remoteTabId: number, title: string, cols: number, rows:
     window.electronAPI.shareRemoteInput(remoteTabId, data);
   });
 
+  registerOsc52(term);
   attachClipboard(pane, term);
 
   tabEl.addEventListener('click', (e) => {
