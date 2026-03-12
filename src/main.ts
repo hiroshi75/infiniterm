@@ -144,6 +144,70 @@ function buildMsys2Env(root: string): { [key: string]: string } {
   };
 }
 
+// ---- Git Bash detection (Windows only) ----
+
+interface GitBashInfo {
+  root: string;
+  bash: string;
+}
+
+function findGitBash(): GitBashInfo | null {
+  if (!isWin) return null;
+  const candidates: string[] = [];
+
+  // Check PATH first (where.exe)
+  try {
+    const result = execFileSync('where.exe', ['git.exe'], { stdio: ['pipe', 'pipe', 'pipe'], encoding: 'utf8' });
+    const gitExe = result.trim().split(/\r?\n/)[0];
+    if (gitExe) {
+      // git.exe is typically in <root>/cmd/git.exe or <root>/bin/git.exe
+      const gitDir = path.dirname(gitExe);
+      const root = path.dirname(gitDir);
+      candidates.push(root);
+    }
+  } catch { /* git not in PATH */ }
+
+  // Standard install locations
+  const programFiles = process.env['ProgramFiles'] ?? 'C:\\Program Files';
+  const programFilesX86 = process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
+  candidates.push(path.join(programFiles, 'Git'));
+  candidates.push(path.join(programFilesX86, 'Git'));
+  const sysDrive = (process.env.SYSTEMDRIVE ?? 'C:').replace(/[/\\]$/, '');
+  candidates.push(path.join(sysDrive, 'Git'));
+
+  for (const root of candidates) {
+    const bash = path.join(root, 'bin', 'bash.exe');
+    if (fs.existsSync(bash)) {
+      // Skip if this is actually the MSYS2 root (avoid duplicates)
+      const msys2 = findMsys2();
+      if (msys2 && root.toLowerCase() === msys2.root.toLowerCase()) continue;
+      return { root, bash };
+    }
+  }
+  return null;
+}
+
+function buildGitBashEnv(root: string): { [key: string]: string } {
+  const gitBinPaths = [
+    path.join(root, 'usr', 'bin'),
+    path.join(root, 'bin'),
+    path.join(root, 'mingw64', 'bin'),
+  ];
+
+  const winPath = process.env.PATH ?? '';
+  const combinedPath = [...gitBinPaths, winPath].join(';');
+
+  return {
+    ...process.env as { [key: string]: string },
+    PATH: combinedPath,
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    TERM_PROGRAM: 'infiniterm',
+    TERM_PROGRAM_VERSION: '0.1.0',
+    LANG: 'ja_JP.UTF-8',
+  };
+}
+
 function buildBaseEnv(): { [key: string]: string } {
   return {
     ...process.env as { [key: string]: string },
@@ -199,7 +263,13 @@ function detectShellsWindows(): ShellEntry[] {
     shells.push({ id: 'pwsh5', label: 'PowerShell 5', exe: ps5, isMsys2: false });
   }
 
-  // 4. CMD
+  // 4. Git Bash
+  const gitBash = findGitBash();
+  if (gitBash) {
+    shells.push({ id: 'git-bash', label: 'Git Bash', exe: gitBash.bash, isMsys2: false });
+  }
+
+  // 5. CMD
   const cmd = process.env.COMSPEC ?? path.join(systemRoot, 'System32', 'cmd.exe');
   if (fs.existsSync(cmd)) {
     shells.push({ id: 'cmd', label: 'Command Prompt', exe: cmd, isMsys2: false });
@@ -264,6 +334,10 @@ function resolveShellEnv(exe: string): { [key: string]: string } {
   const msys2 = findMsys2();
   if (msys2 && exe.toLowerCase().startsWith(msys2.root.toLowerCase())) {
     return buildMsys2Env(msys2.root);
+  }
+  const gitBash = findGitBash();
+  if (gitBash && exe.toLowerCase().startsWith(gitBash.root.toLowerCase())) {
+    return buildGitBashEnv(gitBash.root);
   }
   return buildBaseEnv();
 }
@@ -406,11 +480,13 @@ app.whenReady().then(() => {
     let spawnArgs: string[];
 
     if (isWin) {
-      // MSYS2 シェルは cmd.exe 経由で起動し、先に chcp 65001 (UTF-8) を設定する。
+      // MSYS2 / Git Bash シェルは cmd.exe 経由で起動し、先に chcp 65001 (UTF-8) を設定する。
       const msys2 = findMsys2();
+      const gitBash = findGitBash();
       const isMsys2Shell = !!(msys2 && exe.toLowerCase().startsWith(msys2.root.toLowerCase()));
+      const isGitBashShell = !!(gitBash && exe.toLowerCase().startsWith(gitBash.root.toLowerCase()));
 
-      if (isMsys2Shell) {
+      if (isMsys2Shell || isGitBashShell) {
         const comspec = process.env.COMSPEC ?? 'cmd.exe';
         spawnExe = comspec;
         spawnArgs = ['/c', `chcp 65001>nul 2>&1 & ${exe}`];
