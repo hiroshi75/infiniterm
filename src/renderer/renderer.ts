@@ -813,7 +813,7 @@ function renderShellPicker(): void {
         <div class="shell-name">${s.label}</div>
         <div class="shell-path">${s.exe}</div>
       </span>
-      ${s.id === defaultShellId ? '<span class="default-badge">デフォルト</span>' : ''}
+      ${s.id === defaultShellId ? `<span class="default-badge">${t('defaultBadge')}</span>` : ''}
     `;
 
     // Left click: open new tab
