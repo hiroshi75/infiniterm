@@ -87,6 +87,7 @@ zsh, bash, fish, sh (auto-detected from standard paths + Homebrew)
 | bash (MSYS2) | `C:\msys64\usr\bin\bash.exe` etc. |
 | PowerShell 7 | `C:\Program Files\PowerShell\7\pwsh.exe` |
 | PowerShell 5 | `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` |
+| Git Bash | `C:\Program Files\Git\bin\bash.exe` |
 | Command Prompt | `%COMSPEC%` |
 
 ## Development
