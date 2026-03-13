@@ -277,6 +277,7 @@ function buildGitBashEnv(root: string): { [key: string]: string } {
     TERM_PROGRAM: 'infiniterm',
     TERM_PROGRAM_VERSION: '0.1.0',
     LANG: process.env.LANG ?? 'en_US.UTF-8',
+    LC_ALL: process.env.LC_ALL ?? process.env.LANG ?? 'en_US.UTF-8',
   };
 }
 
