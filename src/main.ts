@@ -318,14 +318,29 @@ function detectShellsWindows(): ShellEntry[] {
 
   // 2. PowerShell 7 (pwsh)
   const programFiles = process.env['ProgramFiles'] ?? 'C:\\Program Files';
-  for (const p of [
+  const programFilesX86 = process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
+  const pwsh7Candidates = [
     path.join(programFiles, 'PowerShell', '7', 'pwsh.exe'),
+    path.join(programFilesX86, 'PowerShell', '7', 'pwsh.exe'),
     path.join(programFiles, 'PowerShell', '7-preview', 'pwsh.exe'),
-  ]) {
+  ];
+  let pwsh7Found = false;
+  for (const p of pwsh7Candidates) {
     if (fs.existsSync(p)) {
       shells.push({ id: 'pwsh7', label: 'PowerShell 7 (pwsh)', exe: p, isMsys2: false });
+      pwsh7Found = true;
       break;
     }
+  }
+  // Fallback: detect pwsh via PATH
+  if (!pwsh7Found) {
+    try {
+      const result = execFileSync('where.exe', ['pwsh.exe'], { stdio: ['pipe', 'pipe', 'pipe'], encoding: 'utf8' });
+      const pwshPath = result.trim().split(/\r?\n/)[0];
+      if (pwshPath && fs.existsSync(pwshPath)) {
+        shells.push({ id: 'pwsh7', label: 'PowerShell 7 (pwsh)', exe: pwshPath, isMsys2: false });
+      }
+    } catch { /* pwsh not in PATH */ }
   }
 
   // 3. PowerShell 5
@@ -333,6 +348,15 @@ function detectShellsWindows(): ShellEntry[] {
   const ps5 = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   if (fs.existsSync(ps5)) {
     shells.push({ id: 'pwsh5', label: 'PowerShell 5', exe: ps5, isMsys2: false });
+  } else {
+    // Fallback: detect powershell via PATH
+    try {
+      const result = execFileSync('where.exe', ['powershell.exe'], { stdio: ['pipe', 'pipe', 'pipe'], encoding: 'utf8' });
+      const psPath = result.trim().split(/\r?\n/)[0];
+      if (psPath && fs.existsSync(psPath)) {
+        shells.push({ id: 'pwsh5', label: 'PowerShell 5', exe: psPath, isMsys2: false });
+      }
+    } catch { /* powershell not in PATH */ }
   }
 
   // 4. Git Bash
