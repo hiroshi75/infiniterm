@@ -843,8 +843,8 @@ function renderShellPicker(): void {
   sshBtn.innerHTML = `
     <span class="shell-icon">🔐</span>
     <span class="shell-info">
-      <div class="shell-name">SSH 接続...</div>
-      <div class="shell-path">リモートサーバーに接続</div>
+      <div class="shell-name">${t('sshConnection')}...</div>
+      <div class="shell-path">${t('connectRemote')}</div>
     </span>
   `;
   sshBtn.addEventListener('click', () => {
@@ -1665,7 +1665,7 @@ async function connectSsh(profile: SSHProfile): Promise<void> {
     });
 
   } catch (err) {
-    term.write(`\r\n\x1b[31m[SSH 接続失敗: ${err}]\x1b[0m\r\n`);
+    term.write(`\r\n\x1b[31m[${t('sshFailed')}: ${err}]\x1b[0m\r\n`);
     session.ptyId = null;
   }
 
