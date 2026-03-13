@@ -573,7 +573,10 @@ app.whenReady().then(() => {
       const prefs = loadPrefs();
       const found = shells.find(s => s.id === prefs.defaultShellId) ?? shells[0];
       if (isWin) {
-        exe = found?.exe ?? (process.env.COMSPEC ?? 'cmd.exe');
+        const comspec = process.env.COMSPEC;
+        const sysRoot = process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows';
+        const cmdFallback = comspec && fs.existsSync(comspec) ? comspec : path.join(sysRoot, 'System32', 'cmd.exe');
+        exe = found?.exe ?? cmdFallback;
       } else {
         exe = found?.exe ?? (process.env.SHELL ?? '/bin/zsh');
       }
@@ -1108,9 +1111,14 @@ app.whenReady().then(() => {
     const shells = detectShells();
     const prefs = loadPrefs();
     const found = shells.find(s => s.id === prefs.defaultShellId) ?? shells[0];
-    const shellExe = found?.exe ?? (isWin
-      ? (process.env.COMSPEC ?? 'cmd.exe')
-      : (isMac ? '/bin/zsh' : (process.env.SHELL ?? '/bin/bash')));
+    const shellExe = found?.exe ?? (() => {
+      if (isWin) {
+        const comspec = process.env.COMSPEC;
+        const sysRoot = process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows';
+        return comspec && fs.existsSync(comspec) ? comspec : path.join(sysRoot, 'System32', 'cmd.exe');
+      }
+      return isMac ? '/bin/zsh' : (process.env.SHELL ?? '/bin/bash');
+    })();
 
     webTerminalPassword = password;
     webTerminalPort = port;
