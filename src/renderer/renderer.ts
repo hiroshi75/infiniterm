@@ -607,6 +607,7 @@ const settingsFileLink = document.getElementById('settings-file-link') as HTMLIn
 const settingsEditor = document.getElementById('settings-editor') as HTMLSelectElement;
 const settingsLanguage = document.getElementById('settings-language') as HTMLSelectElement;
 const settingsTmuxPaneExpansion = document.getElementById('settings-tmux-pane-expansion') as HTMLSelectElement;
+const settingsDefaultShell = document.getElementById('settings-default-shell') as HTMLSelectElement;
 const settingsSaveBtn = document.getElementById('settings-save-btn')!;
 const settingsCancelBtn = document.getElementById('settings-cancel-btn')!;
 
@@ -636,6 +637,15 @@ function openSettings(): void {
   settingsEditor.value = appSettings.editor;
   settingsLanguage.value = appSettings.language;
   settingsTmuxPaneExpansion.value = appSettings.tmuxPaneExpansion;
+  // Populate default shell dropdown
+  settingsDefaultShell.innerHTML = '';
+  for (const s of availableShells) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.label;
+    settingsDefaultShell.appendChild(opt);
+  }
+  settingsDefaultShell.value = defaultShellId;
   settingsDialog.classList.add('open');
 }
 
@@ -753,6 +763,13 @@ settingsSaveBtn.addEventListener('click', () => {
     language: settingsLanguage.value,
     tmuxPaneExpansion: settingsTmuxPaneExpansion.value as 'equal' | 'left',
   });
+  // Save default shell selection
+  const selectedShellId = settingsDefaultShell.value;
+  if (selectedShellId && selectedShellId !== defaultShellId) {
+    defaultShellId = selectedShellId;
+    window.electronAPI.setDefaultShell(selectedShellId);
+    renderShellPicker();
+  }
   closeSettings();
 });
 

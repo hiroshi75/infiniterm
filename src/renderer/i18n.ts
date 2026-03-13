@@ -88,6 +88,7 @@ const translations: Record<string, Record<string, string>> = {
     tmuxPaneExpansion: 'tmux ペイン拡大モード',
     tmuxPaneEqual: '全ペイン均等',
     tmuxPaneLeft: '左端ペインのみ',
+    defaultShell: 'デフォルトシェル',
   },
   en: {
     settings: 'Settings',
@@ -170,6 +171,7 @@ const translations: Record<string, Record<string, string>> = {
     tmuxPaneExpansion: 'tmux Pane Expansion Mode',
     tmuxPaneEqual: 'All panes equal',
     tmuxPaneLeft: 'Leftmost pane only',
+    defaultShell: 'Default Shell',
   },
 };
 
