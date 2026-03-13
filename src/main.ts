@@ -369,7 +369,9 @@ function detectShellsWindows(): ShellEntry[] {
   }
 
   // 5. CMD
-  const cmd = process.env.COMSPEC ?? path.join(systemRoot, 'System32', 'cmd.exe');
+  const comspec = process.env.COMSPEC;
+  const cmdDefault = path.join(systemRoot, 'System32', 'cmd.exe');
+  const cmd = comspec && fs.existsSync(comspec) ? comspec : cmdDefault;
   if (fs.existsSync(cmd)) {
     shells.push({ id: 'cmd', label: 'Command Prompt', exe: cmd, isMsys2: false });
   }
