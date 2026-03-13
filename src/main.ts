@@ -209,8 +209,8 @@ function buildMsys2Env(root: string): { [key: string]: string } {
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'infiniterm',
     TERM_PROGRAM_VERSION: '0.1.0',
-    LANG: 'ja_JP.UTF-8',
-    LC_ALL: 'ja_JP.UTF-8',
+    LANG: process.env.LANG ?? 'en_US.UTF-8',
+    LC_ALL: process.env.LC_ALL ?? process.env.LANG ?? 'en_US.UTF-8',
     MSYS: 'winsymlinks:nativestrict',
     NCURSES_NO_UTF8_ACS: '1',
   };
@@ -247,11 +247,11 @@ function findGitBash(): GitBashInfo | null {
   const sysDrive = (process.env.SYSTEMDRIVE ?? 'C:').replace(/[/\\]$/, '');
   candidates.push(path.join(sysDrive, 'Git'));
 
+  const msys2 = findMsys2();
   for (const root of candidates) {
     const bash = path.join(root, 'bin', 'bash.exe');
     if (fs.existsSync(bash)) {
       // Skip if this is actually the MSYS2 root (avoid duplicates)
-      const msys2 = findMsys2();
       if (msys2 && root.toLowerCase() === msys2.root.toLowerCase()) continue;
       return { root, bash };
     }
@@ -276,7 +276,7 @@ function buildGitBashEnv(root: string): { [key: string]: string } {
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'infiniterm',
     TERM_PROGRAM_VERSION: '0.1.0',
-    LANG: 'ja_JP.UTF-8',
+    LANG: process.env.LANG ?? 'en_US.UTF-8',
   };
 }
 
