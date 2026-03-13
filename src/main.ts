@@ -595,8 +595,9 @@ app.whenReady().then(() => {
       const isGitBashShell = !!(gitBash && exe.toLowerCase().startsWith(gitBash.root.toLowerCase()));
 
       if (isMsys2Shell || isGitBashShell) {
-        const comspec = process.env.COMSPEC ?? 'cmd.exe';
-        spawnExe = comspec;
+        const comspec = process.env.COMSPEC;
+        const sysRoot = process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows';
+        spawnExe = comspec && fs.existsSync(comspec) ? comspec : path.join(sysRoot, 'System32', 'cmd.exe');
         spawnArgs = ['/c', `chcp 65001>nul 2>&1 & ${exe}`];
       } else {
         spawnExe = exe;
@@ -1153,12 +1154,37 @@ app.whenReady().then(() => {
       }
 
       const env = resolveShellEnv(shellExe);
-      const ptyProc = pty.spawn(shellExe, [], {
+
+      let webSpawnExe: string;
+      let webSpawnArgs: string[];
+
+      if (isWin) {
+        const msys2 = findMsys2();
+        const gitBash = findGitBash();
+        const isMsys2Shell = !!(msys2 && shellExe.toLowerCase().startsWith(msys2.root.toLowerCase()));
+        const isGitBashShell = !!(gitBash && shellExe.toLowerCase().startsWith(gitBash.root.toLowerCase()));
+
+        if (isMsys2Shell || isGitBashShell) {
+          const comspec = process.env.COMSPEC;
+          const sysRoot = process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows';
+          webSpawnExe = comspec && fs.existsSync(comspec) ? comspec : path.join(sysRoot, 'System32', 'cmd.exe');
+          webSpawnArgs = ['/c', `chcp 65001>nul 2>&1 & ${shellExe}`];
+        } else {
+          webSpawnExe = shellExe;
+          webSpawnArgs = [];
+        }
+      } else {
+        webSpawnExe = shellExe;
+        webSpawnArgs = [];
+      }
+
+      const ptyProc = pty.spawn(webSpawnExe, webSpawnArgs, {
         name: 'xterm-256color',
         cols: 80,
         rows: 24,
         cwd: os.homedir(),
         env,
+        ...(isWin ? { useConpty: true, conptyInheritCursor: false } : {}),
       });
 
       webTerminalPty = ptyProc;
