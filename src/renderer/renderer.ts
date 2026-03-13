@@ -793,6 +793,7 @@ function shellIcon(s: ShellEntry): string {
   if (s.isMsys2) return '🐧';
   if (s.label.toLowerCase().includes('powershell 7') || s.id === 'pwsh7') return '💠';
   if (s.label.toLowerCase().includes('powershell') || s.id === 'pwsh5') return '🔵';
+  if (s.id === 'git-bash') return '🟧';
   if (s.id === 'cmd') return '⬛';
   if (s.id === 'zsh') return '🐚';
   if (s.id === 'bash') return '🖥';
