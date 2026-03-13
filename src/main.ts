@@ -1054,7 +1054,9 @@ app.whenReady().then(() => {
     const shells = detectShells();
     const prefs = loadPrefs();
     const found = shells.find(s => s.id === prefs.defaultShellId) ?? shells[0];
-    const shellExe = found?.exe ?? (isMac ? '/bin/zsh' : (process.env.SHELL ?? '/bin/bash'));
+    const shellExe = found?.exe ?? (isWin
+      ? (process.env.COMSPEC ?? 'cmd.exe')
+      : (isMac ? '/bin/zsh' : (process.env.SHELL ?? '/bin/bash')));
 
     webTerminalPassword = password;
     webTerminalPort = port;

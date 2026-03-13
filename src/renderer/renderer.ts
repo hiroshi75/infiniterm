@@ -9,6 +9,35 @@ import { DEFAULT_KEYBINDINGS, compileBindings, matchesBinding, CompiledAction } 
 import { THEMES, AppSettings, DEFAULT_SETTINGS } from './themes';
 import { t, setLanguage } from './i18n';
 
+// ---- Cross-platform path utilities ----
+
+/** Check if a path is absolute (handles both Unix `/` and Windows `C:\` / `\\` styles) */
+function isAbsolutePath(p: string): boolean {
+  if (p.startsWith('/')) return true;
+  // Windows: drive letter (C:\, D:/) or UNC (\\server)
+  if (/^[A-Za-z]:[/\\]/.test(p)) return true;
+  if (p.startsWith('\\\\')) return true;
+  return false;
+}
+
+/** Join two path segments with the appropriate separator */
+function joinPath(base: string, segment: string): string {
+  if (!base) return segment;
+  if (!segment) return base;
+  // Use backslash on Windows, forward slash otherwise
+  const sep = window.electronAPI.platform === 'win32' ? '\\' : '/';
+  const endsWithSep = base.endsWith('/') || base.endsWith('\\');
+  return endsWithSep ? base + segment : base + sep + segment;
+}
+
+/** Normalize path separators to the platform default */
+function normalizePath(p: string): string {
+  if (window.electronAPI.platform === 'win32') {
+    return p.replace(/\//g, '\\');
+  }
+  return p;
+}
+
 // ---- Window type augmentation ----
 
 interface ShellEntry {
@@ -502,12 +531,13 @@ function registerFilenameLinks(term: Terminal, session: TabSession): void {
       let baseDir: string;
       if (ctx) {
         baseDir = ctx.targetDir
-          ? (ctx.targetDir.startsWith('/') ? ctx.targetDir : (ctx.cwd + '/' + ctx.targetDir))
+          ? (isAbsolutePath(ctx.targetDir) ? ctx.targetDir : joinPath(ctx.cwd, ctx.targetDir))
           : ctx.cwd;
       } else {
         baseDir = session.cwd || '';
       }
       if (!baseDir) { callback(undefined); return; }
+      baseDir = normalizePath(baseDir);
 
       const candidates = extractFilenameCandidates(text, !!ctx);
       if (candidates.length === 0) { callback(undefined); return; }
