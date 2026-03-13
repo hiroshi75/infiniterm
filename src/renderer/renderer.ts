@@ -893,7 +893,7 @@ function createTerminal(): { term: Terminal; fitAddon: FitAddon; searchAddon: Se
     cursorBlink: appSettings.cursorBlink,
     cursorStyle: appSettings.cursorStyle,
     scrollback: appSettings.scrollback,
-    windowsMode: false,
+    windowsMode: window.electronAPI.platform === 'win32',
     convertEol: false,
     allowProposedApi: true,
   });

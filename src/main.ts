@@ -578,12 +578,21 @@ app.whenReady().then(() => {
       rows,
       cwd: os.homedir(),
       env,
-      ...(isWin ? { useConpty: false } : {}),
+      ...(isWin ? { useConpty: true, conptyInheritCursor: false } : {}),
     });
 
     ptyProc.onData((data: string) => {
-      mainWindow?.webContents.send('pty-data', { id, data });
-      sharingServer?.feedData(id, data);
+      // On Windows, ConPTY emits spurious escape sequences that cause visual
+      // artefacts (e.g. flickering, ghost characters). Strip the most common
+      // offenders:
+      //   - CSI ?25l / ?25h  hide/show cursor pairs emitted around every
+      //     redraw (causes cursor flicker)
+      //   - CSI ?12l / ?12h  stop/start cursor blink
+      const cleaned = isWin
+        ? data.replace(/\x1b\[\?(?:12|25)[hl]/g, '')
+        : data;
+      mainWindow?.webContents.send('pty-data', { id, data: cleaned });
+      sharingServer?.feedData(id, cleaned);
     });
 
     ptyProc.onExit(({ exitCode, signal }) => {
@@ -609,11 +618,23 @@ app.whenReady().then(() => {
     }
   });
 
-  // Resize
+  // Resize — debounce on Windows to prevent ConPTY instability during rapid resizes
+  const resizeTimers = new Map<number, ReturnType<typeof setTimeout>>();
   ipcMain.on('pty-resize', (_event, { id, cols, rows }: { id: number; cols: number; rows: number }) => {
     const ptyProc = ptyProcesses.get(id);
-    if (ptyProc) {
-      try { ptyProc.resize(Math.max(1, cols), Math.max(1, rows)); } catch (_) { /* ignore */ }
+    if (!ptyProc) return;
+    const safeCols = Math.max(1, cols);
+    const safeRows = Math.max(1, rows);
+    if (isWin) {
+      // Debounce ConPTY resizes to avoid flickering and garbled output
+      const existing = resizeTimers.get(id);
+      if (existing) clearTimeout(existing);
+      resizeTimers.set(id, setTimeout(() => {
+        resizeTimers.delete(id);
+        try { ptyProc.resize(safeCols, safeRows); } catch (_) { /* ignore */ }
+      }, 80));
+    } else {
+      try { ptyProc.resize(safeCols, safeRows); } catch (_) { /* ignore */ }
     }
   });
 
