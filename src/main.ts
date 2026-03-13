@@ -177,7 +177,7 @@ function findMsys2(): Msys2Info | null {
   for (const root of getMsys2SearchRoots()) {
     const zsh = path.join(root, 'usr', 'bin', 'zsh.exe');
     const bash = path.join(root, 'usr', 'bin', 'bash.exe');
-    if (fs.existsSync(zsh)) {
+    if (fs.existsSync(zsh) || fs.existsSync(bash)) {
       return { root, zsh, bash };
     }
   }
@@ -307,10 +307,12 @@ function detectShells(): ShellEntry[] {
 function detectShellsWindows(): ShellEntry[] {
   const shells: ShellEntry[] = [];
 
-  // 1. MSYS2 zsh
+  // 1. MSYS2 zsh / bash
   const msys2 = findMsys2();
   if (msys2) {
-    shells.push({ id: 'msys2-zsh', label: 'zsh (MSYS2)', exe: msys2.zsh, isMsys2: true });
+    if (fs.existsSync(msys2.zsh)) {
+      shells.push({ id: 'msys2-zsh', label: 'zsh (MSYS2)', exe: msys2.zsh, isMsys2: true });
+    }
     if (fs.existsSync(msys2.bash)) {
       shells.push({ id: 'msys2-bash', label: 'bash (MSYS2)', exe: msys2.bash, isMsys2: true });
     }
@@ -536,7 +538,11 @@ app.whenReady().then(() => {
   ipcMain.handle('shell-list', () => {
     const shells = detectShells();
     const prefs = loadPrefs();
-    const defaultId = prefs.defaultShellId || (shells[0]?.id ?? '');
+    // Validate saved default still exists; fall back to first detected shell
+    const savedId = prefs.defaultShellId;
+    const defaultId = (savedId && shells.some(s => s.id === savedId))
+      ? savedId
+      : (shells[0]?.id ?? '');
     return { shells, defaultId };
   });
 
