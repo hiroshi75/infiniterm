@@ -78,6 +78,78 @@ function loadAndClearRestartState(): RestartState | null {
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 
+// ---- Windows CWD detection ----
+
+/** Find the deepest descendant process (the actual shell/command) of a PTY process. */
+function getLeafChildPid(pid: number): number {
+  try {
+    const out = execFileSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      `$p=${pid}; while($true){$c=Get-CimInstance Win32_Process -Filter "ParentProcessId=$p" -EA SilentlyContinue | Select -First 1; if(!$c){break}; $p=$c.ProcessId}; $p`
+    ], { encoding: 'utf8', timeout: 3000 }).trim();
+    const childPid = parseInt(out, 10);
+    return (childPid && childPid !== pid) ? childPid : pid;
+  } catch { return pid; }
+}
+
+/**
+ * Read the CWD of a Windows process by querying its PEB (Process Environment Block)
+ * via PowerShell P/Invoke. Falls back to home directory on failure.
+ */
+function getWindowsCwd(pid: number): string {
+  const targetPid = getLeafChildPid(pid);
+  try {
+    const psScript = `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class ProcCwd {
+  [DllImport("ntdll.dll")]
+  static extern int NtQueryInformationProcess(IntPtr h,int c,ref PBI i,int s,out int r);
+  [DllImport("kernel32.dll")]
+  static extern IntPtr OpenProcess(int a,bool b,int p);
+  [DllImport("kernel32.dll")]
+  static extern bool ReadProcessMemory(IntPtr h,IntPtr ba,byte[] bu,int s,out int r);
+  [DllImport("kernel32.dll")]
+  static extern bool CloseHandle(IntPtr h);
+  [StructLayout(LayoutKind.Sequential)]
+  struct PBI {public IntPtr R1;public IntPtr PebBaseAddress;public IntPtr R2a;public IntPtr R2b;public IntPtr Uid;public IntPtr R3;}
+  public static string Get(int pid){
+    IntPtr hp=OpenProcess(0x0410,false,pid);
+    if(hp==IntPtr.Zero)return "";
+    try{
+      var pbi=new PBI();int rl;
+      NtQueryInformationProcess(hp,0,ref pbi,Marshal.SizeOf(pbi),out rl);
+      int ps=IntPtr.Size;
+      byte[] b=new byte[ps];
+      int ppOff=ps==8?0x20:0x10;
+      ReadProcessMemory(hp,pbi.PebBaseAddress+ppOff,b,ps,out rl);
+      IntPtr pp=ps==8?(IntPtr)BitConverter.ToInt64(b,0):(IntPtr)BitConverter.ToInt32(b,0);
+      int cdOff=ps==8?0x38:0x24;
+      byte[] us=new byte[ps+4];
+      ReadProcessMemory(hp,pp+cdOff,us,us.Length,out rl);
+      short len=BitConverter.ToInt16(us,0);
+      IntPtr sp=ps==8?(IntPtr)BitConverter.ToInt64(us,4):(IntPtr)BitConverter.ToInt32(us,4);
+      byte[] sb=new byte[len];
+      ReadProcessMemory(hp,sp,sb,len,out rl);
+      string r=System.Text.Encoding.Unicode.GetString(sb);
+      return r.TrimEnd(new char[]{'\\\\'});
+    }finally{CloseHandle(hp);}
+  }
+}
+"@
+[ProcCwd]::Get(${targetPid})
+`.trim();
+    const out = execFileSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-Command', psScript
+    ], { encoding: 'utf8', timeout: 5000 }).trim();
+    if (out && fs.existsSync(out)) return out;
+  } catch { /* fall through */ }
+
+  // Fallback: return home directory
+  return os.homedir();
+}
+
 // ---- MSYS2 detection (Windows only) ----
 
 function getMsys2SearchRoots(): string[] {
@@ -819,10 +891,11 @@ app.whenReady().then(() => {
           { encoding: 'utf8', timeout: 3000 });
         const match = out.match(/\nn(.*)/);
         return match ? match[1] : '';
-      } else if (!isWin) {
+      } else if (isWin) {
+        return getWindowsCwd(pid);
+      } else {
         return fs.readlinkSync(`/proc/${pid}/cwd`);
       }
-      return '';
     } catch { return ''; }
   });
 
